@@ -1,8 +1,18 @@
 <?php
 require('conexion.php');
 
-# Contador del numero de matriculas
-$idMatriculas = 0;
+# Contador del numero de matriculas, de manera general
+$numeroTutorias = 0;
+# Contador del numero de docentes
+$numeroDocentes = 0;
+
+# Definir los atributos de cada tabla
+$at_alumno = ['codAlumno', 'nombreApellido'];
+$at_docente = ['codDocente', 'nombreApellido'];
+$at_tutoria = ['idTutoria', 'codAlumno', 'codigoSemestre', 'codDocente'];
+$at_docenteContratado = ['codDocente', 'codigoSemestre'];
+$at_alumnoMatriculado = ['codAlumno', 'codigoSemestre', 'tipo'];
+$at_semestre = ['codigoSemestre'];
 
 function existe($clave, $tabla, $atributoClave, $conexionBD){
   $consulta = "SELECT * FROM $tabla WHERE $atributoClave='$clave'";
@@ -10,7 +20,10 @@ function existe($clave, $tabla, $atributoClave, $conexionBD){
   return (mysqli_num_rows($resultado) > 0) ? true : false;
 }
 
-function InsertarAlumnos2022($archivoTmpCsv, $con, $idMatricula){
+function InsertarAlumnos2022($archivoTmpCsv){
+  global $con;
+  global $at_alumno, $at_alumnoMatriculado;
+
   # abrir el archivo
   $registros = file($archivoTmpCsv);
 
@@ -19,53 +32,66 @@ function InsertarAlumnos2022($archivoTmpCsv, $con, $idMatricula){
     $datos_alumno = explode(',', $registros[$i]);
     $codAlumno = $datos_alumno[1];
     $nombres = $datos_alumno[2];
-    # aumentar el identificador de matricula
-    $idMatricula++;
     if (!existe($codAlumno, 'alumno', 'codAlumno', $con)){
       # Agregar en la tabla 'alumno' y 'matricula'
-      $insertarAlumno = "INSERT INTO alumno(
-        codAlumno, nombreApellido
-        ) VALUES ('$codAlumno', '$nombres')";
-      $insertarMatricula = "INSERT INTO matricula(
-        idMatricula, codAlumno, nombreApellido, tipo
-        ) VALUES ('$idMatricula', '$codAlumno', '2022-1', 'Nuevo')";
-
-      if (!mysqli_query($con, $insertarAlumno))
-        echo "<h1>No se pudo agregar alumno, en InsertarAlumnos2022</h1>";
-      if (!mysqli_query($con, $insertarMatricula))
-        echo "<h1>No se pudo agregar matricula nueva, en InsertarAlumnos2022</h1>";
+      Insertar($at_alumno, [$codAlumno, $nombres], 'alumno', $con);
+      Insertar($at_alumnoMatriculado, [$codAlumno, '2022-1', 'Nuevo'], 'alumnoMatriculado', $con);
     }
     else{
       # el alumno ya existe, agregar solo a matricula
-      $insertarMatricula = "INSERT INTO matricula(
-        idMatricula, codAlumno, nombreApellido, tipo
-        ) VALUES ('$idMatricula', '$codAlumno', '2022-1', 'Regular')";
-
-      if (!mysqli_query($con, $insertarMatricula))
-        echo "<h1>No se pudo agregar matricula regular, en InsertarAlumnos2022</h1>";
+      Insertar($at_alumnoMatriculado, [$codAlumno, '2022-1', 'Regular'], 'alumnoMatriculado', $con);
     }
   }
 }
 
-function InsertarDocentes2022($archivoTmpCsv, $con){
+function InsertarDocentes2022($archivoTmpCsv){
+  global $con;
+  global $numeroDocentes;
+  global $at_docente, $at_docenteContratado;
+
   # abrir el archivo
   $registros = file($archivoTmpCsv);
 
   for ($i = 1; $i < count($registros); $i++){
     $datos_docente = explode(',', $registros[$i]);
-    $codDocente = $datos_docente[0];
+    # $codDocente = $datos_docente[0];
     $nombres = $datos_docente[1];
-    if (!existe($codDocente, 'docente', 'codDocente', $con)){
-      $insertarDocente = "INSERT INTO docente(
-        codDocente, nombres
-        ) VALUES ('$codDocente', '$nombres')";
-      if (!mysqli_query($con, $insertarDocente))
-        echo "<h1>No se pudo insertar docente en InsertarDocentes2022</h1>";
+    # -- Busqueda por nombre
+    $codDocente = existeNombreDocente($nombres);
+    if ($codDocente == -1){
+      $numeroDocentes++;
+      Insertar($at_docente, [$numeroDocentes, $nombres], 'docente', $con);
+      Insertar($at_docenteContratado, [$numeroDocentes, '2022-1'], 'docenteContratado', $con);
+    }
+    else{
+      Insertar($at_docenteContratado, [$codDocente, '2022-1'], 'docenteContratado', $con);
     }
   }
 }
 
-function InsertarDistribucionDocentes2021($archivoTmpCsv, $con, $idMatricula){
+function existeNombreDocente($nombre){
+  global $con;
+  $consulta = "SELECT * FROM docente";
+  $resultado = mysqli_query($con, $consulta);
+  #echo "Nombre a buscar " . $nombre . strlen($nombre) . "<br>";
+  while (($registro = mysqli_fetch_assoc($resultado)) != null){
+    #echo print_r($registro) . "<br>";
+    $codDocente = $registro['codDocente'];
+    $nombreApellido = $registro['nombreApellido'];
+    if ($nombre == $nombreApellido){
+      # encontrado
+      return $codDocente;
+    }
+  }
+  return -1;
+}
+
+# Primer funcion a ejecutar (invocar)
+function InsertarDistribucionDocentes2021($archivoTmpCsv){
+  global $con;
+  global $numeroTutorias, $numeroDocentes;
+  global $at_alumno, $at_docente, $at_alumnoMatriculado, $at_docenteContratado, $at_tutoria;
+
   # abrir el archivo
   $registros = file($archivoTmpCsv);
 
@@ -74,54 +100,64 @@ function InsertarDistribucionDocentes2021($archivoTmpCsv, $con, $idMatricula){
 
   while ($i < $longitud){
     $datos = explode(',', $registros[$i]);
-    $codigo = $datos[0];
-    $nombre = $datos[1];
-    if (str_contains($codigo, "Docente")){
-      # TODO:Agregar docente
-      # usar codigo
-      # usar nombre
-      $j = $i + 1;
+    if (count($datos) > 1){
+      $codigo = $datos[0];
+      $nombre = $datos[1];
+      if (str_contains($codigo, "Docente") && (strlen($nombre) > 2)){
+        $numeroDocentes++;
+        # -- Insertar en tabla docente
+        Insertar($at_docente, [$numeroDocentes, trim($nombre)], 'docente', $con);
+        # -- Insertar en la tabla docenteContratado
+        Insertar($at_docenteContratado, [$numeroDocentes, '2021-2'], 'docenteContratado', $con);
 
-      while (true && $j < $longitud){
-        #if ($j >= $longitud){
-        #  $i = $j;
-        #  break;
-        #}
+        $j = $i + 1;
 
-        $codAlumno = $registros[$j];
-        $nombreAlumno = $registros[$j];
-        if (str_contains($codAlumno, "Docente")){
-          $i = $j;
-          break;
-        }
-        else{
-          # insertar alumnos, matricula y tutoria
-          if (!str_contains($codAlumno, "CODIGO")){
-            # incrementar numero de matricula, inicia con 0
-            $idMatricula++;
-            $insertarAlumno = "INSERT INTO alumno(
-              codAlumno, nombreApellido
-              ) VALUES ('$codAlumno', '$nombreAlumno')";
-            $insertarMatricula = "INSERT INTO matricula(
-              idMatricula, codAlumno, semestre, tipo
-              ) VALUES ('$idMatricula', '$codAlumno', '2021-2', 'Nuevo')";
-            $insertarTutoria = "INSERT INTO tutoria(
-              idMatricula, codDocente
-              ) VALUES ('$idMatricula', '$codigo')";
-
-            if (!mysqli_query($con, $insertarAlumno))
-              echo "<h1>No se pudo insertar alumno 2021</h1>";
-            if (!mysqli_query($con, $insertarMatricula))
-              echo "<h1>No se pudo insertar matricula 2021</h1>";
-            if (!mysqli_query($con, $insertarTutoria))
-              echo "<h1>No se pudo insertar tutoria 2021</h1>";
+        while ($j < $longitud){
+          $datosAlumno = explode(',', $registros[$j]);
+          $codAlumno = $datosAlumno[0];
+          $nombreAlumno = $datosAlumno[1];
+          if (str_contains($codAlumno, "Docente")){
+            $i = $j;
+            break;
           }
-          $j++;
+          else{
+            # insertar alumnos, matricula y tutoria
+            if (!str_contains($codAlumno, "CODIGO")){
+              # -- incrementar numero de alumnos matriculados
+              $numeroTutorias++;
+              # -- Insertar en la tabla alumno
+              if (!existe($codAlumno, 'alumno', 'codAlumno', $con)){
+                # -- Insertar en la tabla alumno
+                Insertar($at_alumno, [$codAlumno, trim($nombreAlumno)], 'alumno', $con);
+                # -- Insertar en la tabla alumnoMatricuado
+                Insertar($at_alumnoMatriculado, [$codAlumno, '2021-2', 'Nuevo'], 'alumnoMatriculado', $con);
+                # -- Insertar en la tabla tutoria
+                Insertar($at_tutoria, [$numeroTutorias, $codAlumno, '2021-2', $numeroDocentes], 'tutoria', $con);
+              }
+            }
+            $j++;
+          }
         }
+        $i = $j;
       }
+      else
+        $i++;
     }
     else
       $i++;
   }
+}
+
+$ponerComillas = function ($dato){
+  return "'" . $dato . "'";
+};
+
+function Insertar($atributos, $valores, $tabla, $conexionBD){
+  global $ponerComillas;
+  $valoresMapeados = array_map($ponerComillas, $valores);
+  $insertar = "INSERT INTO " . $tabla . "(" . implode(", ", $atributos)
+    . ") VALUES (" . implode(", ", $valoresMapeados) . ")";
+  if (!mysqli_query($conexionBD, $insertar))
+    echo "<h1>Ocurrio un error al insertar</h1>";
 }
 ?>
