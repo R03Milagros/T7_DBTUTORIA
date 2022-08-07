@@ -19,7 +19,6 @@
 	<div class="contenido">
 		<div class="sub1">
 			<form action="subirArchivos.php" method="POST" enctype="multipart/form-data"/>
-
 				<div class="file-input text-center">
 					<p class="file-input__p" for="file-input">
 						<span> ALUMNOS</span>
@@ -45,11 +44,11 @@
 			<img class="img" src="imagen.jpg"><br>
 		</div>
 		<div class="sub2">
-			<form>
+		<form action="mostrarDatos.php" method="POST" enctype="multipart/form-data"/>
 				<p>SELECCIONE OPCIÓN:</p>
 				<select class="list" name="opciones" id="opcion" title="Seleccione opción">
-					<option>LISTA DE ALUMNOS QUE YA NO SON CONSIDERADOS EN LA TUTORÍA </option>
-					<option>DISTRIBUCIÓN BALANCEADA DE TUTORÍAS PARA EL PRESENTE SEMESTRE</option>
+					<option>LISTA DE ALUMNOS QUE YA NO SON CONSIDERADOS EN LA TUTORIA </option>
+					<option>DISTRIBUCION BALANCEADA DE TUTORIAS PARA EL PRESENTE SEMESTRE</option>
 				</select>
 				<input class ="btn" type="submit" name="subir" class="btn-mostrar" value="MOSTRAR"/>
 			</form>
